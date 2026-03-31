@@ -22,7 +22,9 @@
 
 #define T_TRANSICION       1000000  // 1 Segundo
 #define DEBOUNCE_TIME 200000   // 200 ms
+#define TOTAL_PARPADEO 4000000 //4s
 #define T_PARPADEO    500000 
+#define MOSTRAR_RAYAS 100
 
 static volatile bool flag_btn1 = 0; 
 static volatile bool flag_btn2 = 0; 
@@ -34,7 +36,7 @@ static volatile uint64_t last_isr_time_btn3 = 0;
 
 static volatile bool estado_led = 0;
 
-const uint8_t matriz_numeros[10][7] = {
+const uint8_t matriz_numeros[11][7] = {
     {1, 1, 1, 1, 1, 1, 0}, // 0
     {0, 1, 1, 0, 0, 0, 0}, // 1
     {1, 1, 0, 1, 1, 0, 1}, // 2
@@ -44,7 +46,9 @@ const uint8_t matriz_numeros[10][7] = {
     {1, 0, 1, 1, 1, 1, 1}, // 6
     {1, 1, 1, 0, 0, 0, 0}, // 7
     {1, 1, 1, 1, 1, 1, 1}, // 8
-    {1, 1, 1, 1, 0, 1, 1}  // 9
+    {1, 1, 1, 1, 0, 1, 1},  // 9
+    {0, 0, 0, 0, 0, 0, 1}  // Rayas
+
 
 };
 
@@ -69,8 +73,8 @@ static inline void display(uint8_t valor) {
     else {
         if (valor > 99) valor = 99;  
 
-        uint8_t decenas = valor / 10;
-        uint8_t unidades = valor % 10;
+         decenas = valor / 10;
+         unidades = valor % 10;
     }
 	//DECENAS
     gpio_set_level(CU, 0);          
@@ -87,7 +91,7 @@ static inline void display(uint8_t valor) {
 
 // ISR para Botón 1 
 static void IRAM_ATTR btn1_isr(void* arg){
-    uint64_t current_time;
+    uint64_t current_time = 0;
     timer_get_counter_value(TIMER_GROUP_0, TIMER_0, &current_time);
     if(current_time - last_isr_time_btn1 >= DEBOUNCE_TIME){
         flag_btn1 = 1;
@@ -97,7 +101,7 @@ static void IRAM_ATTR btn1_isr(void* arg){
 
 // ISR para Botón 2 
 static void IRAM_ATTR btn2_isr(void* arg){
-    uint64_t current_time;
+    uint64_t current_time = 0;
     timer_get_counter_value(TIMER_GROUP_0, TIMER_0, &current_time);
     if(current_time - last_isr_time_btn2 >= DEBOUNCE_TIME){
         flag_btn2 = 1;
@@ -107,9 +111,9 @@ static void IRAM_ATTR btn2_isr(void* arg){
 
 // ISR para Botón 3
 static void IRAM_ATTR btn3_isr(void* arg){
-    uint64_t current_time;
+    uint64_t current_time = 0;
     timer_get_counter_value(TIMER_GROUP_0, TIMER_0, &current_time);
-    if(current_time - last_isr_time_btn2 >= DEBOUNCE_TIME){
+    if(current_time - last_isr_time_btn3 >= DEBOUNCE_TIME){
         flag_btn3 = 1;
         last_isr_time_btn3 = current_time;
     }
@@ -149,7 +153,7 @@ void app_main() {
     gpio_install_isr_service(0); 
     gpio_isr_handler_add(BTN_1, btn1_isr, NULL); 
     gpio_isr_handler_add(BTN_2, btn2_isr, NULL);
-    gpio_isr_handler_add(BTN_2, btn3_isr, NULL); 
+    gpio_isr_handler_add(BTN_3, btn3_isr, NULL); 
 
     // Timer de Debouncing
     timer_config_t timer_conf_main = {
@@ -177,23 +181,89 @@ void app_main() {
     timer_isr_callback_add(TIMER_GROUP_0, TIMER_1, alarma_isr, NULL, 0);
     timer_enable_intr(TIMER_GROUP_0, TIMER_1); 
     
+    uint64_t now= 0;
+	uint64_t last = 0; 
+
+    uint8_t estacion_actual= 1;
+	uint8_t estacion_destino = 1; 
+    uint16_t numero_mostrar = 0;
+
     typedef enum {
-        E_INICIAL, E_MOVIENDO, E_LLEGADA, E_RESET
+        E_INICIAL, E_MOVIENDO, E_LLEGADA
     } estado_t; 
     estado_t estado_actual = E_INICIAL;
 
-    gpio_install_isr_service(0); 
-    gpio_isr_handler_add(BTN, button_isr, NULL);
 
+    
     while(1){
         timer_get_counter_value(TIMER_GROUP_0, TIMER_0, &now);
         switch(estado_actual){
             case E_INICIAL:
-                display(10); 
+                display(MOSTRAR_RAYAS); 
                 gpio_set_level(LED, 0);
-                if(flag_btn_1){
-                    
+                if(flag_btn1){
+                    flag_btn1 = 0; 
+                    estacion_destino = 1;
+                    estado_actual = E_MOVIENDO;
+                    last = now;
                 }
+                else if(flag_btn2){
+                    flag_btn2 = 0; 
+                    estacion_destino = 2;
+                    estado_actual = E_MOVIENDO;
+                    last = now;
+                }
+                else if(flag_btn3){
+                    flag_btn3 = 0; 
+                    estacion_destino = 3;
+                    estado_actual = E_MOVIENDO;
+                    last = now;
+                }
+                break; 
+            case E_MOVIENDO: 
+                
+                
+                if(now - last >= T_TRANSICION){
+                    
+                    last = now; 
+
+                    if(estacion_actual >= 3){
+                        estacion_actual = 1;
+                    }
+                    else{
+                        estacion_actual = estacion_actual +1;
+                    }
+                    
+ 
+                }
+                numero_mostrar = estacion_actual + estacion_destino*10;
+                display(numero_mostrar);
+
+                
+                if(flag_btn1)flag_btn1 = 0;
+                if(flag_btn2)flag_btn2 = 0;
+                if(flag_btn3)flag_btn3 = 0;
+
+                if(estacion_actual == estacion_destino){
+                    timer_start(TIMER_GROUP_0, TIMER_1);
+                    estado_actual = E_LLEGADA;
+                    last = now;
+                }
+                break;
+
+            case E_LLEGADA:
+                display(numero_mostrar);
+                if(now - last >= TOTAL_PARPADEO){
+                    timer_pause(TIMER_GROUP_0, TIMER_1);
+                    last = now;
+                    estado_actual =  E_INICIAL;
+                }
+                break;
+            
+
+
+
+            
 
         }
 
