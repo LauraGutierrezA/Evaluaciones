@@ -4,6 +4,7 @@
 #include "driver/timer.h"
 #include "driver/gpio.h"
 #include "driver/gptimer.h"
+#include "driver/ledc.h"
 
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
@@ -25,6 +26,9 @@
 
 #define LED_L 13
 #define LED_R 12 
+
+#define RLY_L 4
+#define RLY_R 5 
 
 #define SAMPLE_PERIOD_US 100000
 #define DEBOUNCE_TIME 200000
@@ -82,19 +86,19 @@ static inline void display(uint16_t valor) {
     gpio_set_level(CU, 0);        
     escribir_segmentos(centenas);    
     gpio_set_level(CC, 1);          
-    vTaskDelay(pdMS_TO_TICKS(10)); 
+    vTaskDelay(pdMS_TO_TICKS(3)); 
 
     gpio_set_level(CU, 0);
     gpio_set_level(CC, 0);        
     escribir_segmentos(decenas);    
     gpio_set_level(CD, 1);          
-    vTaskDelay(pdMS_TO_TICKS(10)); 
+    vTaskDelay(pdMS_TO_TICKS(3)); 
 
     gpio_set_level(CC, 0);
     gpio_set_level(CD, 0);        
     escribir_segmentos(unidades);    
     gpio_set_level(CU, 1);          
-    vTaskDelay(pdMS_TO_TICKS(10));  
+    vTaskDelay(pdMS_TO_TICKS(3));  
 }
 
 // ISR para Botón L
@@ -138,6 +142,28 @@ void app_main() {
     };
     adc_cali_create_scheme_line_fitting(&cali_config, &adc_cali_handle); 
 
+    //Configuración del PWM
+    ledc_timer_config_t ledc_timer = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .timer_num = LEDC_TIMER_0, 
+        .duty_resolution = LEDC_TIMER_12_BIT, 
+        .freq_hz = 5000, 
+        .clk_cfg = LEDC_AUTO_CLK, 
+    };
+    ledc_timer_config(&ledc_timer);
+
+    ledc_channel_config_t ledc_channel = {
+        .speed_mode = LEDC_LOW_SPEED_MODE, 
+        .channel = LEDC_CHANNEL_0, 
+        .timer_sel = LEDC_TIMER_0, 
+        .intr_type = LEDC_INTR_DISABLE, 
+        .gpio_num = 2, 
+        .duty = 0, 
+        .hpoint = 0,
+    };
+    ledc_channel_config(&ledc_channel);
+
+    // Configuración del Timer
     timer_config_t timer_conf = {
 		.divider = 80, 
 		.counter_dir = TIMER_COUNT_UP, 
@@ -149,11 +175,13 @@ void app_main() {
 	timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0); 
 	timer_start(TIMER_GROUP_0, TIMER_0);
 
+
     gpio_config_t out_cfg = {
         .pin_bit_mask = (1ULL<< SEG_A) | (1ULL<< SEG_B) | (1ULL<< SEG_C) | 
                         (1ULL<< SEG_D) | (1ULL<< SEG_E) | (1ULL<< SEG_F) | 
                         (1ULL<< SEG_G) | (1ULL<< CU) | (1ULL<< CD) | (1ULL<< CC) | 
-                        (1ULL<< LED_L) | (1ULL<< LED_R),
+                        (1ULL<< LED_L) | (1ULL<< LED_R) |
+                        (1ULL<< RLY_L) | (1ULL<< RLY_R),
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -178,8 +206,6 @@ void app_main() {
     
     uint64_t now = 0; 
     uint64_t last = 0;
-    
-    uint16_t display = 0;
 
     int raw = 0;
     int adc_raw = 0; 
@@ -189,8 +215,18 @@ void app_main() {
     int Vmin_real = 142;
     int Vmax_real = 3139;
 
+    // FSM
+    typedef enum {
+        E_INICIO, 
+        E_L, 
+        E_R
+    } estado_t; 
+    
+    estado_t estado_actual = E_INICIO;
+
     while(1){
         timer_get_counter_value(TIMER_GROUP_0, TIMER_0, &now); 
+        display(porcentaje);
 
         if((now - last) >= SAMPLE_PERIOD_US){
             last = now;
@@ -207,17 +243,60 @@ void app_main() {
         }
         vTaskDelay(pdMS_TO_TICKS(10));
 
-        if(flag_btn_L){
-            flag_btn_L = 0;
-            gpio_set_level(LED_L, estado_led_L); 
-            estado_led_L = !estado_led_L;
+
+        uint32_t duty_cycle = (porcentaje * 4095)/100;
+        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty_cycle);
+        ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+
+        switch (estado_actual){
+            case E_INICIO:
+                gpio_set_level(LED_L, 0);
+                gpio_set_level(LED_R, 0);
+
+                gpio_set_level(RLY_L, 0);
+                gpio_set_level(RLY_R, 0);
+
+                if(flag_btn_L){
+                    flag_btn_L = 0;
+                    gpio_set_level(LED_L, 1); 
+
+                    gpio_set_level(RLY_R, 0);
+                    gpio_set_level(RLY_L, 1);
+
+                    estado_actual = E_L;
+                }
+                else if(flag_btn_R){
+                    flag_btn_R = 0;
+                    gpio_set_level(LED_R, 1); 
+
+                    gpio_set_level(RLY_L, 0);
+                    gpio_set_level(RLY_R, 1);
+
+                    estado_actual = E_R;
+                }
+                break;
+            case E_L:
+                if (flag_btn_L) {
+                    flag_btn_L = 0;
+                    estado_actual = E_INICIO;
+                }
+                else if (flag_btn_R){
+                    flag_btn_R = 0;
+                }
+                break;
+            case E_R:
+                if (flag_btn_R) {
+                    flag_btn_R = 0;
+                    estado_actual = E_INICIO;
+                }
+                else if (flag_btn_L){
+                    flag_btn_L = 0;
+                }
+                break;
+        
+
         }
 
-        if(flag_btn_R){
-            flag_btn_R = 0;
-            gpio_set_level(LED_R, estado_led_R); 
-            estado_led_R = !estado_led_R;
-        }
 
     }
 
