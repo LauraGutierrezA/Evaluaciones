@@ -5,6 +5,7 @@
 #include "driver/gpio.h"
 #include "driver/gptimer.h"
 #include "driver/ledc.h"
+#include "esp_rom_sys.h"
 
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
@@ -86,19 +87,21 @@ static inline void display(uint16_t valor) {
     gpio_set_level(CU, 0);        
     escribir_segmentos(centenas);    
     gpio_set_level(CC, 1);          
-    vTaskDelay(pdMS_TO_TICKS(3)); 
+    esp_rom_delay_us(3000); 
 
     gpio_set_level(CU, 0);
     gpio_set_level(CC, 0);        
     escribir_segmentos(decenas);    
     gpio_set_level(CD, 1);          
-    vTaskDelay(pdMS_TO_TICKS(3)); 
+    esp_rom_delay_us(3000); 
 
     gpio_set_level(CC, 0);
     gpio_set_level(CD, 0);        
     escribir_segmentos(unidades);    
     gpio_set_level(CU, 1);          
-    vTaskDelay(pdMS_TO_TICKS(3));  
+    esp_rom_delay_us(3000);  
+
+    gpio_set_level(CU, 0);
 }
 
 // ISR para Botón L
@@ -188,7 +191,7 @@ void app_main() {
         .intr_type = GPIO_INTR_DISABLE
     };
     gpio_config(&out_cfg); 
-    gpio_set_level(CD, 0); gpio_set_level(CU, 0); 
+    gpio_set_level(CC, 0); gpio_set_level(CD, 0); gpio_set_level(CU, 0); 
     gpio_set_level(LED_L, 0); gpio_set_level(LED_R, 0);
 
     gpio_config_t in_cfg = {
@@ -241,10 +244,10 @@ void app_main() {
             printf("Crudo: %d | Calibrado %dmV | Velocidad Motor %d%%\n", adc_raw, voltage_mv, porcentaje);
 
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
+        
 
 
-        uint32_t duty_cycle = (porcentaje * 4095)/100;
+        uint32_t duty_cycle = ((100-porcentaje) * 4095)/100;
         ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty_cycle);
         ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
 
