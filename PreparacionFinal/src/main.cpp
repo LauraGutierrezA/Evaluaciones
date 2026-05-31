@@ -25,11 +25,11 @@ extern "C" void app_main() {
     Spimax spimax(host, MOSI, MISO, clk, cs_pin, clock_speed_hz, mode);
     spimax.init();
 
-    while(1){
-        spimax.writeRegister(0x0C, 0x01); //No shutdown
-        spimax.writeRegister(0x0C, 0x01); //Test
-        vTaskDelay(pdMS_TO_TICKS(3000));
-        spimax.writeRegister(0x0C, 0x00); //Test
-    }
+    spimax.writeRegister(0x0C, 0x01); //No shutdown
+    spimax.writeRegister(0x0C, 0x01); //Test
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    spimax.writeRegister(0x0C, 0x00); //Test
+
+    
     
 }
