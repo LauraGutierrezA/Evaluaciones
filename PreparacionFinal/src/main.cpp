@@ -26,10 +26,15 @@ extern "C" void app_main() {
     spimax.init();
 
     spimax.writeRegister(0x0C, 0x01); //No shutdown
-    spimax.writeRegister(0x0C, 0x01); //Test
-    vTaskDelay(pdMS_TO_TICKS(3000));
-    spimax.writeRegister(0x0C, 0x00); //Test
-
+    spimax.writeRegister(0x09, 0xFF); //Decode Mode
+    spimax.writeRegister(0x0A, 0x0A); //Intensity
+    spimax.writeRegister(0x0B, 0x04); //Scan Limit
+    
+    spimax.writeRegister(0x01, 0x02); //Digit 0
+    spimax.writeRegister(0x02, 0x07); //Digit 1 
+    spimax.writeRegister(0x03, 0x03); //Digit 2
+    spimax.writeRegister(0x04, 0x08); //Digit 3
+    vTaskDelay(pdMS_TO_TICKS(1));
     
     
 }
