@@ -5,13 +5,13 @@
 #include "driver/i2c.h"
 
 struct RtcTime {
-    uint8_t _seconds;
-    uint8_t _minutes;
-    uint8_t _hours;
-    uint8_t _dayOfWeek;
-    uint8_t _dayOfMonth;
-    uint8_t _month;
-    uint16_t _year;
+    uint8_t seconds;
+    uint8_t minutes;
+    uint8_t hours;
+    uint8_t dayOfWeek;
+    uint8_t dayOfMonth;
+    uint8_t month;
+    uint16_t year;
 };  
 
 class I2cr {

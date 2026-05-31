@@ -1,58 +1,56 @@
+#include "I2CR.h"
 #include "UART.h"
-#include "LED.h"
 
-Led ledAzul(25); // GPIO 2 para el LED
-Uart uart(UART_NUM_0, 1, 3, "115200 8N1");
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-const char *MSG_INICIO = "\nUART Iniciado\n"; 
+#define I2C_PORT I2C_NUM_0
+#define I2C_SDA_PIN 32  
+#define I2C_SCL_PIN 33
+#define I2C_FREQ_HZ 100000
+#define I2C_SLAVE_ADDR 0x68
+
+#define UART_PORT UART_NUM_0
+#define UART_TXD_PIN 1
+#define UART_RDX_PIN 3
+#define UART_CONFIG "115200N81"
 
 extern "C" void app_main() {
-    ledAzul.init();
-    ledAzul.off();
-    uart.init();       
-    uart.sendUART(MSG_INICIO);   
+    I2cr rtc(I2C_PORT, I2C_SDA_PIN, I2C_SCL_PIN, I2C_FREQ_HZ, I2C_SLAVE_ADDR);
+    Uart uart(UART_PORT, UART_TXD_PIN, UART_RDX_PIN, UART_CONFIG);
 
-    int brightness = 100;
-   
+    rtc.init();
+    uart.init();
+    //formato segundos, minutos, horas, día de la semana, día del mes, mes, año
+    RtcTime horaActual = {30, 58, 11, 7, 31, 5, 25};
+    rtc.writeTime(horaActual); // Escribe una hora específica
+    RtcTime rtcTime;
 
-    ledAzul.breathe(10);
-    ledAzul.init();
-    ledAzul.off();
+    while(1){
+        esp_err_t lectura = rtc.readTime(&rtcTime); // Lee la hora actual del RTC
 
-
-    while (1){ 
-        
-        char comando = uart.readCommandUART();
-
-        if( comando == 'E'){
-            ledAzul.init();
-            uart.sendUART("Encendiendo LED\n");
-            ledAzul.on();
+        if (lectura == ESP_OK) {
+            char buffer[100];
+            const char* dayName = "Desconocido";
+            switch (rtcTime.dayOfWeek) {
+                case 1: dayName = " Lunes"; break;
+                case 2: dayName = " Martes"; break;
+                case 3: dayName = " Miércoles"; break;
+                case 4: dayName = " Jueves"; break;
+                case 5: dayName = " Viernes"; break;
+                case 6: dayName = " Sábado"; break;
+                case 7: dayName = " Domingo"; break;
+            };
+            snprintf(buffer, sizeof(buffer), "Hora: %02d:%02d:%02d, Fecha: %02d/%02d/%04d, Día de la semana: %s",
+                    rtcTime.hours, rtcTime.minutes, rtcTime.seconds,
+                    rtcTime.dayOfMonth, rtcTime.month, rtcTime.year,
+                    dayName);
+            uart.sendUART(buffer); // Envía la hora leída por UART
+        } else {
+            uart.sendUART("Error al leer el RTC");
         }
-        else if( comando == 'A'){
-            ledAzul.init();
-            uart.sendUART("Apagando LED\n");
-            ledAzul.off();
-        }
-        else if( comando == 'T'){
-            ledAzul.init();
-            uart.sendUART("Toggling LED\n");
-            ledAzul.toggle(5);
-        }
-        else if( comando == 'B'){
-            uart.sendUART("Breathe LED\n");
-            ledAzul.breathe(10);
-            ledAzul.off();
-        }
-        else if( comando == 'I'){
-            brightness += 100;
-            if (brightness > 1023) brightness = 0;
-            uart.sendUART("Ajustando Intensidad\n");
-            ledAzul.intensity(brightness);
-        }
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Espera 1 segundo antes de la siguiente lectura
 
-
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-
+    };
+    
 }
