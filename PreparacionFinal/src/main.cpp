@@ -10,6 +10,13 @@
 #define BTN_2 22
 #define LED_1 5
 
+void descomponerValor(int valor, uint8_t* digitos) {
+    for (int i = 0; i < 4; i++) {
+        digitos[i] = valor % 10;
+        valor /= 10;
+    }
+}
+
 extern "C" void app_main() {
     Uart uart( UART_NUM_0, 1, 3, "115200N81" ); 
     uart.init();
@@ -30,11 +37,23 @@ extern "C" void app_main() {
     spimax.writeRegister(0x0A, 0x0A); //Intensity
     spimax.writeRegister(0x0B, 0x04); //Scan Limit
     
-    spimax.writeRegister(0x01, 0x02); //Digit 0
-    spimax.writeRegister(0x02, 0x07); //Digit 1 
-    spimax.writeRegister(0x03, 0x03); //Digit 2
-    spimax.writeRegister(0x04, 0x08); //Digit 3
-    vTaskDelay(pdMS_TO_TICKS(1));
+    uart.sendUART("SPIMAX Initialized\r\n");
+
+
+    while(1){
+        const char* cmd = "DISP:%d";
+        int outValue = 0;
+        uint8_t digitos[4];
+        if (uart.writeUART(cmd, &outValue)) {
+            descomponerValor(outValue, digitos); //Descompone el valor en dígitos individuales
+            spimax.writeRegister(0x01, digitos[0]);
+            spimax.writeRegister(0x02, digitos[1]); //Actualiza el dígito 0 del display con el valor recibido por UART
+            spimax.writeRegister(0x03, digitos[2]);
+            spimax.writeRegister(0x04, digitos[3]);
+            uart.sendUART("Display Updated\r\n");
+        }
+        vTaskDelay(pdMS_TO_TICKS(100)); // Pequeña pausa para evitar saturar el CPU
+    }
     
     
 }
