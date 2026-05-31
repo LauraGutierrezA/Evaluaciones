@@ -44,15 +44,17 @@ extern "C" void app_main() {
         const char* cmd = "DISP:%d";
         int outValue = 0;
         uint8_t digitos[4];
-        if (uart.writeUART(cmd, &outValue)) {
+        for (uint16_t i = 0; i < 1000; i++) {
+            outValue = i;
             descomponerValor(outValue, digitos); //Descompone el valor en dígitos individuales
             spimax.writeRegister(0x01, digitos[0]);
             spimax.writeRegister(0x02, digitos[1]); //Actualiza el dígito 0 del display con el valor recibido por UART
             spimax.writeRegister(0x03, digitos[2]);
             spimax.writeRegister(0x04, digitos[3]);
             uart.sendUART("Display Updated\r\n");
+            vTaskDelay(pdMS_TO_TICKS(1000)); // Pequeña pausa para evitar saturar el CPU
         }
-        vTaskDelay(pdMS_TO_TICKS(100)); // Pequeña pausa para evitar saturar el CPU
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Pausa antes de reiniciar el conteo
     }
     
     
