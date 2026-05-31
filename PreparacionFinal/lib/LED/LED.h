@@ -15,6 +15,7 @@ class Led {
         void toggle(uint8_t freq_hz); 
         void breathe(uint16_t speed);
         void intensity(uint16_t duty);
+        bool _isPwmInitialized;
     private: 
         uint8_t _pin; // toma lo que le pasa el constructor o sea el uin8_t gpio
     protected: 

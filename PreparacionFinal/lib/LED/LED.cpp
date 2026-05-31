@@ -25,12 +25,16 @@ void Led::init(void){
 }
 
 void Led::on(void){
-    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
+    if (_isPwmInitialized) {
+        ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
+    }
     gpio_set_level((gpio_num_t)_pin, 1);
 }
 
 void Led::off(void){
-    ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
+    if (_isPwmInitialized) {
+        ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
+    }
     gpio_set_level((gpio_num_t)_pin, 0);
 }
 
@@ -103,8 +107,10 @@ void Led::intensity(uint16_t porcentaje){
 
     ledc_channel_config(&channel_conf); 
 
+    _isPwmInitialized = true; 
+    
     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0); 
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
 
 }
 
