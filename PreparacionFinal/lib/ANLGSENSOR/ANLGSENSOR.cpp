@@ -3,7 +3,7 @@
 AnlgSensor::AnlgSensor(adc_unit_t unit, adc_channel_t channel) {
     _unit = unit;
     _channel = channel;
-    adc_oneshot_unit_handle_t _adcHandle;
+    
 }
 
 AnlgSensor::~AnlgSensor() {
