@@ -1,61 +1,41 @@
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "driver/spi_master.h"
+#include "driver/gpio.h"
+#include "BTC.h" // Incluimos tu nueva clase compacta
+#include "LED.h"
 
-#include "SPIMAX.h"
-#include "UART.h"
+#define LED_PIN GPIO_NUM_2
 
-#define BTN_1 23
-#define BTN_2 22
-#define LED_1 5
+extern "C" void app_main(void) {
+    // Configuración inicial del LED físico
+    gpio_config_t io_conf = {};
+    io_conf.pin_bit_mask = (1ULL << LED_PIN);
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    gpio_config(&io_conf);
+    gpio_set_level(LED_PIN, 0);
 
-void descomponerValor(int valor, uint8_t* digitos) {
-    for (int i = 0; i < 4; i++) {
-        digitos[i] = valor % 10;
-        valor /= 10;
-    }
-}
+    // Creamos nuestro objeto Bluetooth y le damos el nombre que verá el celular
+    Btc bluetooth("Mi_ESP32_Reloj");
+    bluetooth.init(); // Arranca toda la magia asincrónica en paralelo
 
-extern "C" void app_main() {
-    Uart uart( UART_NUM_0, 1, 3, "115200N81" ); 
-    uart.init();
+    while (1) {
+        // En nuestro ciclo infinito, solo le preguntamos al objeto si el callback detectó algo
+        if (bluetooth.hasData()) {
+            char comando = bluetooth.getCommand(); // Obtenemos el comando
 
-    spi_host_device_t host = SPI2_HOST;
-    int MOSI = 23;
-    int MISO = 22;
-    int clk = 19;
-    int cs_pin = 18;
-    int clock_speed_hz = 10000000; //10MHz
-    int mode = 0;
-
-    Spimax spimax(host, MOSI, MISO, clk, cs_pin, clock_speed_hz, mode);
-    spimax.init();
-
-    spimax.writeRegister(0x0C, 0x01); //No shutdown
-    spimax.writeRegister(0x09, 0xFF); //Decode Mode
-    spimax.writeRegister(0x0A, 0x0A); //Intensity
-    spimax.writeRegister(0x0B, 0x04); //Scan Limit
-    
-    uart.sendUART("SPIMAX Initialized\r\n");
-
-
-    while(1){
-        const char* cmd = "DISP:%d";
-        int outValue = 0;
-        uint8_t digitos[4];
-        for (uint16_t i = 0; i < 1000; i++) {
-            outValue = i;
-            descomponerValor(outValue, digitos); //Descompone el valor en dígitos individuales
-            spimax.writeRegister(0x01, digitos[0]);
-            spimax.writeRegister(0x02, digitos[1]); //Actualiza el dígito 0 del display con el valor recibido por UART
-            spimax.writeRegister(0x03, digitos[2]);
-            spimax.writeRegister(0x04, digitos[3]);
-            uart.sendUART("Display Updated\r\n");
-            vTaskDelay(pdMS_TO_TICKS(1000)); // Pequeña pausa para evitar saturar el CPU
+            if (comando == 'E') {
+                gpio_set_level(LED_PIN, 1);
+                bluetooth.send("Acción ejecutada: LED Encendido desde C++\r\n");
+            } 
+            else if (comando == 'A') {
+                gpio_set_level(LED_PIN, 0);
+                bluetooth.send("Acción ejecutada: LED Apagado desde C++\r\n");
+            } 
+            else {
+                bluetooth.send("Comando no reconocido.\r\n");
+            }
         }
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Pausa antes de reiniciar el conteo
+
+        vTaskDelay(pdMS_TO_TICKS(50)); // Pausa pequeña para descanso del procesador
     }
-    
-    
 }
